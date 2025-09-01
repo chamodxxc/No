@@ -695,7 +695,7 @@ function setupCommandHandlers(socket, number) {
     }
 
     break;
-
+		  }
                 // SYSTEM COMMAND
                 case 'system': {
                     const startTime = socketCreationTime.get(number) || Date.now();
