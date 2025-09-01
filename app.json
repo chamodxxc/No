@@ -1,0 +1,21 @@
+{
+  "name": "WHITESHADOW-MD",
+  "description": "WhatsApp Bot with Multi-Number Support - Auto Pairing",
+  "repository": "https://github.com/chamodxxc/Cnw.git",
+  "logo": "https://raw.githubusercontent.com/chamodxxc/Cnw/main/logo.png",
+  "keywords": ["whatsapp", "bot", "multi-device", "baileys", "CNW-md"],
+  "buildpacks": [
+    {
+      "url": "heroku/nodejs"
+    }
+  ],
+  "env": {
+    "PORT": {
+      "description": "Port number for the web server",
+      "value": "3000"
+    }
+  },
+  "scripts": {
+    "postdeploy": "node index.js"
+  }
+}
