@@ -487,24 +487,51 @@ function setupCommandHandlers(socket, number) {
                     const minutes = Math.floor((uptime % 3600) / 60);
                     const seconds = Math.floor(uptime % 60);
 
-                    const title = '🪨 Hellow, *"Itz: WHITESHADOW-MINI"*';
-                    const content = `*© bY|* WHITESHADOW\n` +                                   `*◯ A B O U T*\n` +
-                                   `> This is a lightweight, stable WhatsApp bot designed to run 24/7. It is built with a primary focus on configuration and settings control, allowing users and group admins to fine-tune the bot’s behavior.\n` +
-                                   `*◯ D E P L O Y*\n` +
-                                   `> *Webiste* https://kelumxz-md.vercel.app`;
-                    const footer = config.BOT_FOOTER;
+    const captionText = `
+╭────◉◉◉────៚\n⏰ Bot Uptime: ${hours}h ${minutes}m ${seconds}s\n🟢 Active session: ${activeSockets.size}\n╰────◉◉◉────៚\n\n🔢 Your Number: ${number}\n\n*▫️WHITESHADOW-MD Main Website 🌐*\n> ...
+`;
 
-                    await socket.sendMessage(sender, {
-                        image: { url: config.BUTTON_IMAGES.ALIVE },
-                        caption: formatMessage(title, content, footer),
-                        buttons: [
-                            { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: 'MENU' }, type: 1 },
-                            { buttonId: `${config.PREFIX}ping`, buttonText: { displayText: 'PING' }, type: 1 }
+    await socket.sendMessage(m.chat, {
+        buttons: [
+            {
+                buttonId: 'action',
+                buttonText: {
+                    displayText: '📂 Menu Options'
+                },
+                type: 4,
+                nativeFlowInfo: {
+                    name: 'single_select',
+                    paramsJson: JSON.stringify({
+                        title: 'Click Here ❏',
+                        sections: [
+                            {
+                                title: `WHITESHADOW-𝐌𝙳`,
+                                highlight_label: '',
+                                rows: [
+                                    {
+                                        title: 'MENU 📌',
+                                        description: '𝐏𝙾𝚆𝙴𝚁𝙳 𝐁𝚈 Whiteshadow-𝐌𝙳',
+                                        id: `${config.PREFIX}menu`,
+                                    },
+                                    {
+                                        title: 'ALIVE 📌',
+                                        description: '𝐏𝙾𝚆𝙴𝚁𝙳 𝐁𝚈 WHITESHADOW-𝐌𝙳',
+                                        id: `${config.PREFIX}alive`,
+                                    },
+                                ],
+                            },
                         ],
-                        quoted: msg
-                    });
-                    break;
-                }
+                    }),
+                },
+            },
+        ],
+        headerType: 1,
+        viewOnce: true,
+        image: { url: "https://files.catbox.moe/fj19m9.jpg" },
+        caption: `WHITESHADOW MD MAX 𝐁𝙾𝚃 𝐀𝙻𝙸𝚅𝙴 𝐍𝙾𝚆\n\n${captionText}`,
+    }, { quoted: msg });
+    break;
+       }
 //=======================================
 
 //=======================================
