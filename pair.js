@@ -506,17 +506,7 @@ function setupCommandHandlers(socket, number) {
                     break;
                 }
 //=======================================
-case 'menu': {
-                    await socket.sendMessage(from, {
-                        image: { url: config.BUTTON_IMAGES.ALIVE },
-                        caption: formatMessage(
-                            'WHITESHADOW-𝐌𝙳 𝐌𝙸𝙽𝙸 𝐁𝙾𝚃 𝐌𝙴𝙽𝚄',
-                            `*➤ Available Commands..!! 🌐💭*\n\n┏━━━━━━━━━━━ ◉◉➢\n┇ *\`${config.PREFIX}alive\`*\n┋ • Show bot status\n┋\n┋ *\`${config.PREFIX}Song\`*\n┋ • Downlode Songs\n┋\n┋ *\`${config.PREFIX}winfo\`*\n┋ • Get User Profile Picture\n┋\n┋ *\`${config.PREFIX}aiimg\`*\n┋ • Genarate Ai Image\n┋\n┋ *\`${config.PREFIX}logo\`*\n┋ • Create Logo\n┋\n┋ *\`${config.PREFIX}fancy\`*\n┋ • View Fancy Text\n┋\n┋ *\`${config.PREFIX}tiktok\`*\n┋ • Downlode tiktok video\n┋\n┋ *\`${config.PREFIX}fb\`*\n┋ • Downlode facebook video\n┋\n┋ *\`${config.PREFIX}ig\`*\n┋ • Downlode instagram video\n┋\n┋ *\`${config.PREFIX}ts\`*\n┋ • Search tiktok videos\n┋\n┋ *\`${config.PREFIX}ai\`*\n┋ • New Ai Chat\n┋\n┋ *\`${config.PREFIX}news\`*\n┋ • View latest news update\n┋\n┋ *\`${config.PREFIX}nasa\`*\n┋ • View latest nasa news update\n┋\n┋ *\`${config.PREFIX}gossip\`*\n┋ • View gossip news update\n┋\n┋ \`${config.PREFIX}cricket\`\n┇ • cricket news updates\n┇\n┇ *\`${config.PREFIX}bomb\`*\n┇• Send Bomb Massage\n┇\n┇ *\`${config.PREFIX}deleteme\`*\n┇• Delete your session\n┋\n┗━━━━━━━━━━━ ◉◉➣`,
-                            'WHITESHADOW-𝐌𝙳 𝐅𝚁𝙴𝙴 𝐁𝙾𝚃'
-                        )
-                    });
-                    break;
-}
+
 //=======================================
                
                 
@@ -705,7 +695,7 @@ case 'menu': {
     }
 
     break;
-		  }
+
                 // SYSTEM COMMAND
                 case 'system': {
                     const startTime = socketCreationTime.get(number) || Date.now();
@@ -764,9 +754,94 @@ case 'menu': {
                 }
 
                 // SONG DOWNLOAD COMMAND WITH BUTTON
+                case 'song': {
+                    try {
+                        const text = (msg.message.conversation || msg.message.extendedTextMessage.text || '').trim();
+                        const q = text.split(" ").slice(1).join(" ").trim();
+                        if (!q) {
+                            await socket.sendMessage(sender, { 
+                                text: '*🚫 Please enter a song name to search.*',
+                                buttons: [
+                                    { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: '📋 MENU' }, type: 1 }
+                                ]
+                            });
+                            return;
+                        }
+
+                        const searchResults = await yts(q);
+                        if (!searchResults.videos.length) {
+                            await socket.sendMessage(sender, { 
+                                text: '*🚩 Result Not Found*',
+                                buttons: [
+                                    { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: '📋 MENU' }, type: 1 }
+                                ]
+                            });    
+                            return;
+                        }
+
+                        const video = searchResults.videos[0];
+
+                        // API CALL
+                        const apiUrl = `${api}/download/ytmp3?url=${encodeURIComponent(video.url)}&apikey=${apikey}`;
+                        const response = await fetch(apiUrl);
+                        const data = await response.json();
+
+                        if (!data.status || !data.data?.result) {
+                            await socket.sendMessage(sender, { 
+                                text: '*🚩 Download Error. Please try again later.*',
+                                buttons: [
+                                    { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: '📋 MENU' }, type: 1 }
+                                ]
+                            });
+                            return;
+                        }
+
+                        const { title, uploader, duration, quality, format, thumbnail, download } = data.data.result;
+
+                        const titleText = '*༊ WHITESHADOW-MINI SONG DOWNLOADER*';
+                        const content = `┏━━━━━━━━━━━━━━━━\n` +
+                            `┃📝 \`Title\` : ${video.title}\n` +
+                            `┃📈 \`Views\` : ${video.views}\n` +
+                            `┃🕛 \`Duration\` : ${video.timestamp}\n` +
+                            `┃🔗 \`URL\` : ${video.url}\n` +
+                            `┗━━━━━━━━━━━━━━━━`;
+
+                        const footer = config.BOT_FOOTER || '';
+                        const captionMessage = formatMessage(titleText, content, footer);
+
+                        await socket.sendMessage(sender, {
+                            image: { url: config.BUTTON_IMAGES.SONG },
+                            caption: captionMessage,
+                            buttons: [
+                                { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: '📋 MENU' }, type: 1 },
+                                { buttonId: `${config.PREFIX}alive`, buttonText: { displayText: '🤖 BOT INFO' }, type: 1 }
+                            ]
+                        });
+
+                        await socket.sendMessage(sender, {
+                            audio: { url: download },
+                            mimetype: 'audio/mpeg'
+                        });
+
+                        await socket.sendMessage(sender, {
+                            document: { url: download },
+                            mimetype: "audio/mpeg",
+                            fileName: `${video.title}.mp3`,
+                            caption: captionMessage
+                        });
+
+                    } catch (err) {
+                        console.error(err);
+                        await socket.sendMessage(sender, { 
+                            text: '*❌ Internal Error. Please try again later.*',
+                            buttons: [
+                                { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: '📋 MENU' }, type: 1 }
+                            ]
+                        });
+                    }
+                    break;
+                }
                 
-                        
-        /
                 // NEWS COMMAND
                 case 'news': {
                     await socket.sendMessage(sender, {
