@@ -764,93 +764,102 @@ case 'menu': {
                 }
 
                 // SONG DOWNLOAD COMMAND WITH BUTTON
-                case 'song': {
-                    try {
-                        const text = (msg.message.conversation || msg.message.extendedTextMessage.text || '').trim();
-                        const q = text.split(" ").slice(1).join(" ").trim();
-                        if (!q) {
-                            await socket.sendMessage(sender, { 
-                                text: '*🚫 Please enter a song name to search.*',
-                                buttons: [
-                                    { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: '📋 MENU' }, type: 1 }
-                                ]
-                            });
-                            return;
-                        }
+                
+                        case 'song': {
+    try {
+        const text = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').trim();
+        const q = text.split(" ").slice(1).join(" ").trim();
 
-                        const searchResults = await yts(q);
-                        if (!searchResults.videos.length) {
-                            await socket.sendMessage(sender, { 
-                                text: '*🚩 Result Not Found*',
-                                buttons: [
-                                    { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: '📋 MENU' }, type: 1 }
-                                ]
-                            });    
-                            return;
-                        }
+        if (!q) {
+            await socket.sendMessage(sender, { 
+                text: '*🚫 Please enter a song name to search.*',
+                buttons: [
+                    { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: '📋 MENU' }, type: 1 }
+                ]
+            });
+            return;
+        }
 
-                        const video = searchResults.videos[0];
+        // 🔎 Search on YouTube
+        const searchResults = await yts(q);
+        if (!searchResults.videos.length) {
+            await socket.sendMessage(sender, { 
+                text: '*🚩 Result Not Found*',
+                buttons: [
+                    { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: '📋 MENU' }, type: 1 }
+                ]
+            });    
+            return;
+        }
 
-                        // API CALL
-                        const apiUrl = `${api}/download/ytmp3?url=${encodeURIComponent(video.url)}&apikey=${apikey}`;
-                        const response = await fetch(apiUrl);
-                        const data = await response.json();
+        const video = searchResults.videos[0];
+        const videoUrl = video.url;
 
-                        if (!data.status || !data.data?.result) {
-                            await socket.sendMessage(sender, { 
-                                text: '*🚩 Download Error. Please try again later.*',
-                                buttons: [
-                                    { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: '📋 MENU' }, type: 1 }
-                                ]
-                            });
-                            return;
-                        }
+        // 🌐 API Call (Keith API)
+        const apiUrl = `https://apis-keith.vercel.app/download/dlmp3?url=${encodeURIComponent(videoUrl)}`;
+        const response = await fetch(apiUrl);
+        const data = await response.json();
 
-                        const { title, uploader, duration, quality, format, thumbnail, download } = data.data.result;
+        if (!data.status || !data.result?.success) {
+            await socket.sendMessage(sender, { 
+                text: '*🚩 Download Error. Please try again later.*',
+                buttons: [
+                    { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: '📋 MENU' }, type: 1 }
+                ]
+            });
+            return;
+        }
 
-                        const titleText = '*༊ WHITESHADOW-MINI SONG DOWNLOADER*';
-                        const content = `┏━━━━━━━━━━━━━━━━\n` +
-                            `┃📝 \`Title\` : ${video.title}\n` +
-                            `┃📈 \`Views\` : ${video.views}\n` +
-                            `┃🕛 \`Duration\` : ${video.timestamp}\n` +
-                            `┃🔗 \`URL\` : ${video.url}\n` +
-                            `┗━━━━━━━━━━━━━━━━`;
+        const { title, thumbnail, downloadUrl, duration, quality } = data.result.data;
 
-                        const footer = config.BOT_FOOTER || '';
-                        const captionMessage = formatMessage(titleText, content, footer);
+        const titleText = '*༊ WHITESHADOW-MINI SONG DOWNLOADER*';
+        const content = `┏━━━━━━━━━━━━━━━━\n` +
+            `┃📝 \`Title\` : ${title}\n` +
+            `┃🕛 \`Duration\` : ${video.timestamp || duration + "s"}\n` +
+            `┃📈 \`Views\` : ${video.views}\n` +
+            `┃🔗 \`URL\` : ${videoUrl}\n` +
+            `┃🎶 \`Quality\` : ${quality}kbps\n` +
+            `┗━━━━━━━━━━━━━━━━`;
 
-                        await socket.sendMessage(sender, {
-                            image: { url: config.BUTTON_IMAGES.SONG },
-                            caption: captionMessage,
-                            buttons: [
-                                { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: '📋 MENU' }, type: 1 },
-                                { buttonId: `${config.PREFIX}alive`, buttonText: { displayText: '🤖 BOT INFO' }, type: 1 }
-                            ]
-                        });
+        const footer = config.BOT_FOOTER || '';
+        const captionMessage = formatMessage(titleText, content, footer);
 
-                        await socket.sendMessage(sender, {
-                            audio: { url: download },
-                            mimetype: 'audio/mpeg'
-                        });
+        // 📋 Info Card with Buttons
+        await socket.sendMessage(sender, {
+            image: { url: thumbnail },
+            caption: captionMessage,
+            buttons: [
+                { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: '📋 MENU' }, type: 1 },
+                { buttonId: `${config.PREFIX}alive`, buttonText: { displayText: '🤖 BOT INFO' }, type: 1 }
+            ]
+        });
 
-                        await socket.sendMessage(sender, {
-                            document: { url: download },
-                            mimetype: "audio/mpeg",
-                            fileName: `${video.title}.mp3`,
-                            caption: captionMessage
-                        });
+        // 🎵 Send Audio
+        await socket.sendMessage(sender, {
+            audio: { url: downloadUrl },
+            mimetype: 'audio/mpeg'
+        });
 
-                    } catch (err) {
-                        console.error(err);
-                        await socket.sendMessage(sender, { 
-                            text: '*❌ Internal Error. Please try again later.*',
-                            buttons: [
-                                { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: '📋 MENU' }, type: 1 }
-                            ]
-                        });
-                    }
-                    break;
-                }
+        // 📁 Send as Document
+        await socket.sendMessage(sender, {
+            document: { url: downloadUrl },
+            mimetype: "audio/mpeg",
+            fileName: `${title}.mp3`,
+            caption: captionMessage
+        });
+
+    } catch (err) {
+        console.error(err);
+        await socket.sendMessage(sender, { 
+            text: '*❌ Internal Error. Please try again later.*',
+            buttons: [
+                { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: '📋 MENU' }, type: 1 }
+            ]
+        });
+    }
+    break;
+			
+}
                 
                 // NEWS COMMAND
                 case 'news': {
