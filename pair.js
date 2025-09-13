@@ -506,7 +506,43 @@ function setupCommandHandlers(socket, number) {
                     break;
                 }
 //=======================================
+case 'ping': {
+    const start = new Date().getTime();
+    const msgg = await socket.sendMessage(sender, { text: '🏓 Pinging...' }, { quoted: msg });
+    const end = new Date().getTime();
 
+    // Ping Speed
+    const ping = end - start;
+
+    // Uptime Calculation
+    const startTime = socketCreationTime.get(number) || Date.now();
+    const uptime = Math.floor((Date.now() - startTime) / 1000);
+    const hours = Math.floor(uptime / 3600);
+    const minutes = Math.floor((uptime % 3600) / 60);
+    const seconds = Math.floor(uptime % 60);
+
+    const title = '📡 System Status: *PING RESULT*';
+    const content = `*© bY|* WHITESHADOW\n` +
+                    `*◯ P I N G*\n` +
+                    `> Response Speed: *${ping} ms*\n\n` +
+                    `*◯ U P T I M E*\n` +
+                    `> ${hours}h ${minutes}m ${seconds}s\n` +
+                    `\n*Everything running smoothly ✅*`;
+
+    const footer = config.BOT_FOOTER;
+
+    await socket.sendMessage(sender, {
+        image: { url: config.BUTTON_IMAGES.PING },
+        caption: formatMessage(title, content, footer),
+        buttons: [
+            { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: 'MENU' }, type: 1 },
+            { buttonId: `${config.PREFIX}alive`, buttonText: { displayText: 'ALIVE' }, type: 1 }
+        ],
+        quoted: msg
+    });
+
+    break;
+		}
 //=======================================
                
                 
