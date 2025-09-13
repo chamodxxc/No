@@ -532,7 +532,7 @@ case 'ping': {
     const footer = config.BOT_FOOTER;
 
     await socket.sendMessage(sender, {
-        image: { url: config.BUTTON_IMAGES.PING },
+        image: { url: config.BUTTON_IMAGES.ALIVE },
         caption: formatMessage(title, content, footer),
         buttons: [
             { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: 'MENU' }, type: 1 },
