@@ -4,19 +4,21 @@ const path = require('path');
 const { exec } = require('child_process');
 const router = express.Router();
 const pino = require('pino');
-const { Octokit } = require('@octokit/rest');
 const moment = require('moment-timezone');
 const Jimp = require('jimp');
 const crypto = require('crypto');
 const axios = require('axios');
-const yts = require("yt-search");
-const fetch = require("node-fetch"); 
+const yts = require('yt-search');
+const fetch = require('node-fetch');
+const os = require('os');
+const ddownr = require('denethdev-ytmp3');
 const api = `https://api-dark-shan-yt.koyeb.app`;
 const apikey = `edbcfabbca5a9750`;
 const { initUserEnvIfMissing } = require('./settingsdb');
 const { initEnvsettings, getSetting } = require('./settings');
+
 //=======================================
-const autoReact = getSetting('AUTO_REACT')|| 'off';
+const autoReact = getSetting('AUTO_REACT') || 'off';
 
 //=======================================
 const {
@@ -46,10 +48,10 @@ const config = {
     OTP_EXPIRY: 300000,
     NEWS_JSON_URL: '',
     BOT_NAME: 'WHITESHADOW-MINI',
-    OWNER_NAME: 'Whiteshadow',
+    OWNER_NAME: 'WHITESHADOW',
     OWNER_NUMBER: '94704896880',
     BOT_VERSION: '1.0.0',
-    BOT_FOOTER: '> © ᴘᴏᴡᴇʀᴇᴅ ʙʏ WʜɪᴛᴇSʜᴀᴅᴏᴡ-ᴍᴅ',
+    BOT_FOOTER: '> ©ᴘᴏᴡᴇʀᴇᴅ ʙʏ WʜɪᴛᴇSʜᴀᴅᴏᴡ-ᴍᴅ',
     CHANNEL_LINK: 'https://whatsapp.com/channel/0029Vb4bj5zI7BeFm6aM8O1p',
     BUTTON_IMAGES: {
         ALIVE: 'https://files.catbox.moe/fj19m9.jpg',
@@ -59,8 +61,22 @@ const config = {
         VIDEO: 'https://files.catbox.moe/fyr37r.jpg'
     }
 };
+const { MongoClient } = require('mongodb');
+const { v4: uuidv4 } = require('uuid');
 
-// List Message Generator
+const mongoUri = 'mongodb+srv://mrshrii404:JLtbz0CEOC1u6CwS@shri.gkhohrr.mongodb.net/';
+const client = new MongoClient(mongoUri);
+let db;
+
+async function initMongo() {
+    if (!db) {
+        await client.connect();
+        db = client.db('KelumXz');
+        // Create index for faster queries
+        await db.collection('sessions').createIndex({ number: 1 });
+    }
+    return db;
+}
 function generateListMessage(text, buttonTitle, sections) {
     return {
         text: text,
@@ -71,35 +87,24 @@ function generateListMessage(text, buttonTitle, sections) {
     };
 }
 //=======================================
-// Button Message Generator with Image Support
 function generateButtonMessage(content, buttons, image = null) {
     const message = {
         text: content,
         footer: config.BOT_FOOTER,
         buttons: buttons,
-        headerType: 1 // Default to text header
+        headerType: 1
     };
-//=======================================
-    // Add image if provided
     if (image) {
-        message.headerType = 4; // Image header
+        message.headerType = 4;
         message.image = typeof image === 'string' ? { url: image } : image;
     }
-
     return message;
 }
 //=======================================
-const octokit = new Octokit({
-    auth: process.env.GITHUB_TOKEN
-});
-const owner = process.env.GITHUB_REPO_OWNER;
-const repo = process.env.GITHUB_REPO_NAME;
-
 const activeSockets = new Map();
 const socketCreationTime = new Map();
 const SESSION_BASE_PATH = './session';
 const NUMBER_LIST_PATH = './numbers.json';
-const otpStore = new Map();
 
 if (!fs.existsSync(SESSION_BASE_PATH)) {
     fs.mkdirSync(SESSION_BASE_PATH, { recursive: true });
@@ -119,52 +124,21 @@ function loadAdmins() {
 function formatMessage(title, content, footer) {
     return `${title}\n\n${content}\n\n${footer}`;
 }
-function generateOTP() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-}
 function getSriLankaTimestamp() {
     return moment().tz('Asia/Colombo').format('YYYY-MM-DD HH:mm:ss');
 }
-async function cleanDuplicateFiles(number) {
-    try {
-        const sanitizedNumber = number.replace(/[^0-9]/g, '');
-        const { data } = await octokit.repos.getContent({
-            owner,
-            repo,
-            path: 'session'
-        });
-
-        const sessionFiles = data.filter(file => 
-            file.name.startsWith(`empire_${sanitizedNumber}_`) && file.name.endsWith('.json')
-        ).sort((a, b) => {
-            const timeA = parseInt(a.name.match(/empire_\d+_(\d+)\.json/)?.[1] || 0);
-            const timeB = parseInt(b.name.match(/empire_\d+_(\d+)\.json/)?.[1] || 0);
-            return timeB - timeA;
-        });
-
-        const configFiles = data.filter(file => 
-            file.name === `config_${sanitizedNumber}.json`
-        );
-
-        if (sessionFiles.length > 1) {
-            for (let i = 1; i < sessionFiles.length; i++) {
-                await octokit.repos.deleteFile({
-                    owner,
-                    repo,
-                    path: `session/${sessionFiles[i].name}`,
-                    message: `Delete duplicate session file for ${sanitizedNumber}`,
-                    sha: sessionFiles[i].sha
-                });
-                console.log(`Deleted duplicate session file: ${sessionFiles[i].name}`);
-            }
-        }
-
-        if (configFiles.length > 1) {
-            console.log(`Config file for ${sanitizedNumber} already exists`);
-        }
-    } catch (error) {
-        console.error(`Failed to clean duplicate files for ${number}:`, error);
-    }
+// Utility function for runtime formatting (used in 'system' case)
+function runtime(seconds) {
+    seconds = Number(seconds);
+    const d = Math.floor(seconds / (3600 * 24));
+    const h = Math.floor((seconds % (3600 * 24)) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    const dDisplay = d > 0 ? d + (d === 1 ? " day, " : " days, ") : "";
+    const hDisplay = h > 0 ? h + (h === 1 ? " hour, " : " hours, ") : "";
+    const mDisplay = m > 0 ? m + (m === 1 ? " minute, " : " minutes, ") : "";
+    const sDisplay = s > 0 ? s + (s === 1 ? " second" : " seconds") : "";
+    return dDisplay + hDisplay + mDisplay + sDisplay;
 }
 //=======================================
 async function joinGroup(socket) {
@@ -227,23 +201,6 @@ async function sendAdminConnectMessage(socket, number, groupResult) {
         } catch (error) {
             console.error(`Failed to send connect message to admin ${admin}:`, error);
         }
-    }
-}
-//=======================================
-async function sendOTP(socket, number, otp) {
-    const userJid = jidNormalizedUser(socket.user.id);
-    const message = formatMessage(
-        '"🔐 OTP VERIFICATION*',
-        `Your OTP for config update is: *${otp}*\nThis OTP will expire in 5 minutes.`,
-        `${config.BOT_FOOTER}`
-    );
-
-    try {
-        await socket.sendMessage(userJid, { text: message });
-        console.log(`OTP ${otp} sent to ${number}`);
-    } catch (error) {
-        console.error(`Failed to send OTP to ${number}:`, error);
-        throw error;
     }
 }
 //=======================================
@@ -388,7 +345,7 @@ async function SendSlide(socket, jid, newsItems) {
             imgBuffer = await resize(item.thumbnail, 300, 200);
         } catch (error) {
             console.error(`Failed to resize image for ${item.title}:`, error);
-            imgBuffer = await Jimp.read('https://i.ibb.co/zhBs4Sh6/6344.jpg');
+            imgBuffer = await Jimp.read('https://cdn.yupra.my.id/yp/fhpkqv8a.jpg');
             imgBuffer = await imgBuffer.resize(300, 200).getBufferAsync(Jimp.MIME_JPEG);
         }
         let imgsc = await prepareWAMessageMedia({ image: imgBuffer }, { upload: socket.waUploadToServer });
@@ -478,417 +435,331 @@ function setupCommandHandlers(socket, number) {
         if (!command) return;
 
         try {
-            switch (command) {   
-                // ALIVE COMMAND WITH BUTTON
-                case 'alive': {
+            switch (command) {
+                case 'menu': {
                     const startTime = socketCreationTime.get(number) || Date.now();
                     const uptime = Math.floor((Date.now() - startTime) / 1000);
                     const hours = Math.floor(uptime / 3600);
                     const minutes = Math.floor((uptime % 3600) / 60);
                     const seconds = Math.floor(uptime % 60);
 
-                    const title = '🪨 Hellow, *"Itz: WHITESHADOW-MINI"*';
-                    const content = `*© bY|* WHITESHADOW\n` +                                   `*◯ A B O U T*\n` +
+                    const title = '┏━❐  `H E L L O W`\n┃ *⭔ Itz:* WHITESHADOW-MINI\n┃ *⭔ Type:* MINI BOT\n┃ *⭔ Platform:* Heroku\n┃ *⭔ UpTime:* ${hours}h ${minutes}m ${seconds}s\n┗━❐';
+                    const content = `*© WHITESHADOW-MINI*\n` +
+                                   `*◯ A B O U T*\n` +
                                    `> This is a lightweight, stable WhatsApp bot designed to run 24/7. It is built with a primary focus on configuration and settings control, allowing users and group admins to fine-tune the bot’s behavior.\n` +
                                    `*◯ D E P L O Y*\n` +
-                                   `> *Webiste* https://whiteshadow-md.vercel.app`;
+                                   `> *Website* https://whiteshadow-md.vercel.app`;
                     const footer = config.BOT_FOOTER;
 
                     await socket.sendMessage(sender, {
-                        image: { url: config.BUTTON_IMAGES.ALIVE },
+                        image: { url: config.BUTTON_IMAGES.MENU }, // Changed to MENU image
                         caption: formatMessage(title, content, footer),
                         buttons: [
-                            { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: 'MENU' }, type: 1 },
-                            { buttonId: `${config.PREFIX}ping`, buttonText: { displayText: 'PING' }, type: 1 }
+                            { buttonId: `${config.PREFIX}downloadmenu`, buttonText: { displayText: 'DOWNLOAD' }, type: 1 },
+                            { buttonId: `${config.PREFIX}ping`, buttonText: { displayText: 'CONVERT' }, type: 1 },
+                            { buttonId: `${config.PREFIX}ping`, buttonText: { displayText: 'OTHER' }, type: 1 },
+                            { buttonId: `${config.PREFIX}owner`, buttonText: { displayText: 'OWNER' }, type: 1 }
                         ],
                         quoted: msg
                     });
                     break;
                 }
-//=======================================
-case 'ping': {
-    try {
-        // Ping Speed Calculation
-        const start = performance.now();
-        await delay(100); // Small delay to measure latency
-        const end = performance.now();
-        const ping = Math.floor(end - start);
-
-        // Uptime Calculation
-        const startTime = socketCreationTime.get(number) || Date.now();
-        const uptime = Math.floor((Date.now() - startTime) / 1000);
-        const hours = Math.floor(uptime / 3600);
-        const minutes = Math.floor((uptime % 3600) / 60);
-        const seconds = Math.floor(uptime % 60);
-
-        const title = '📡 System Status: *PING RESULT*';
-        const content = `*© bY|* WHITESHADOW\n` +
-                        `*◯ P I N G*\n` +
-                        `> Response Speed: *${ping} ms*\n\n` +
-                        `*◯ U P T I M E*\n` +
-                        `> ${hours}h ${minutes}m ${seconds}s\n` +
-                        `\n*Everything running smoothly ✅*`;
-
-        const footer = config.BOT_FOOTER;
-
-        await socket.sendMessage(sender, {
-            text: formatMessage(title, content, footer),
-            buttons: [
-                { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: 'MENU' }, type: 1 },
-                { buttonId: `${config.PREFIX}alive`, buttonText: { displayText: 'ALIVE' }, type: 1 }
-            ],
-            quoted: msg
-        });
-    } catch (e) {
-        await socket.sendMessage(sender, { text: "❌ Error while checking ping." }, { quoted: msg });
-        console.error(e);
-    }
-    break;
-								 }
-//=======================================
-               
-                
-                // OWNER COMMAND WITH VCARD
-                case 'owner': {
-                    const vcard = 'BEGIN:VCARD\n'
-                        + 'VERSION:3.0\n' 
-                        + 'FN:SHALA OWNER\n'
-                        + 'ORG:SHALA OWNER\n'
-                        + 'TEL;type=CELL;type=VOICE;waid=9470489680:+94 70 489 6880\n'
-                        + 'EMAIL:chamodwanasinhe@gmail.com\n'
-                        + 'END:VCARD';
-
-                    await socket.sendMessage(sender, {
-                        contacts: {
-                            displayName: "WHITESHADOW",
-                            contacts: [{ vcard }]
-                        },
-                        image: { url: config.BUTTON_IMAGES.OWNER },
-                        caption: '*👑 WHITESHADOW MD OWNER DETAILS*',
-                        buttons: [
-                            { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: '📋 MENU' }, type: 1 },
-                            { buttonId: `${config.PREFIX}alive`, buttonText: { displayText: '🤖 BOT INFO' }, type: 1 }
-                        ]
-                    });     
-                    break;     
-                }
-
-          case 'fancy': {
-  const axios = require("axios");
-
-  const q =
-    msg.message?.conversation ||
-    msg.message?.extendedTextMessage?.text ||
-    msg.message?.imageMessage?.caption ||
-    msg.message?.videoMessage?.caption || '';
-
-  const text = q.trim().replace(/^.fancy\s+/i, ""); // remove .fancy prefix
-
-  if (!text) {
-    return await socket.sendMessage(sender, {
-      text: "❎ *Please provide text to convert into fancy fonts.*\n\n📌 *Example:* `.fancy Sula`"
-    });
-  }
-
-  try {
-    const apiUrl = `https://www.dark-yasiya-api.site/other/font?text=${encodeURIComponent(text)}`;
-    const response = await axios.get(apiUrl);
-
-    if (!response.data.status || !response.data.result) {
-      return await socket.sendMessage(sender, {
-        text: "❌ *Error fetching fonts from API. Please try again later.*"
-      });
-    }
-
-    // Format fonts list
-    const fontList = response.data.result
-      .map(font => `*${font.name}:*\n${font.result}`)
-      .join("\n\n");
-
-    const finalMessage = `🎨 *Fancy Fonts Converter*\n\n${fontList}\n\n_𝐏𝙾𝚆𝙴𝚁𝙳 𝐁𝚈 whiteshadow 𝐌𝙳_`;
-
-    await socket.sendMessage(sender, {
-      text: finalMessage
-    }, { quoted: msg });
-
-  } catch (err) {
-    console.error("Fancy Font Error:", err);
-    await socket.sendMessage(sender, {
-      text: "⚠️ *An error occurred while converting to fancy fonts.*"
-    });
-  }
-
-  break;
-       }
-	      case 'ts': {
-    const axios = require('axios');
-
-    const q = msg.message?.conversation ||
-              msg.message?.extendedTextMessage?.text ||
-              msg.message?.imageMessage?.caption ||
-              msg.message?.videoMessage?.caption || '';
-
-    const query = q.replace(/^[.\/!]ts\s*/i, '').trim();
-
-    if (!query) {
-        return await socket.sendMessage(sender, {
-            text: '[❗] TikTok. what you want to watch 🔍'
-        }, { quoted: msg });
-    }
-
-    async function tiktokSearch(query) {
-        try {
-            const searchParams = new URLSearchParams({
-                keywords: query,
-                count: '10',
-                cursor: '0',
-                HD: '1'
-            });
-
-            const response = await axios.post("https://tikwm.com/api/feed/search", searchParams, {
-                headers: {
-                    'Content-Type': "application/x-www-form-urlencoded; charset=UTF-8",
-                    'Cookie': "current_language=en",
-                    'User-Agent': "Mozilla/5.0"
-                }
-            });
-
-            const videos = response.data?.data?.videos;
-            if (!videos || videos.length === 0) {
-                return { status: false, result: "No videos found." };
-            }
-
-            return {
-                status: true,
-                result: videos.map(video => ({
-                    description: video.title || "No description",
-                    videoUrl: video.play || ""
-                }))
-            };
-        } catch (err) {
-            return { status: false, result: err.message };
-        }
-    }
-
-    function shuffleArray(array) {
-        for (let i = array.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [array[i], array[j]] = [array[j], array[i]];
-        }
-    }
-
-    try {
-        const searchResults = await tiktokSearch(query);
-        if (!searchResults.status) throw new Error(searchResults.result);
-
-        const results = searchResults.result;
-        shuffleArray(results);
-
-        const selected = results.slice(0, 6);
-
-        const cards = await Promise.all(selected.map(async (vid) => {
-            const videoBuffer = await axios.get(vid.videoUrl, { responseType: "arraybuffer" });
-
-            const media = await prepareWAMessageMedia({ video: videoBuffer.data }, {
-                upload: socket.waUploadToServer
-            });
-
-            return {
-                body: proto.Message.InteractiveMessage.Body.fromObject({ text: '' }),
-                footer: proto.Message.InteractiveMessage.Footer.fromObject({ text: "WHITESHADOW LITE 𝐁𝙾𝚃" }),
-                header: proto.Message.InteractiveMessage.Header.fromObject({
-                    title: vid.description,
-                    hasMediaAttachment: true,
-                    videoMessage: media.videoMessage // 🎥 Real video preview
-                }),
-                nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.fromObject({
-                    buttons: [] // ❌ No buttons
-                })
-            };
-        }));
-
-        const msgContent = generateWAMessageFromContent(sender, {
-            viewOnceMessage: {
-                message: {
-                    messageContextInfo: {
-                        deviceListMetadata: {},
-                        deviceListMetadataVersion: 2
-                    },
-                    interactiveMessage: proto.Message.InteractiveMessage.fromObject({
-                        body: { text: `🔎 *TikTok Search:* ${query}` },
-                        footer: { text: "> 𝐏𝙾𝚆𝙴𝚁𝙳 𝐁𝚈 WHITESHADOW-𝐌𝙳" },
-                        header: { hasMediaAttachment: false },
-                        carouselMessage: { cards }
-                    })
-                }
-            }
-        }, { quoted: msg });
-
-        await socket.relayMessage(sender, msgContent.message, { messageId: msgContent.key.id });
-
-    } catch (err) {
-        await socket.sendMessage(sender, {
-            text: `❌ Error: ${err.message}`
-        }, { quoted: msg });
-    }
-
-    break;
-		  }
-                // SYSTEM COMMAND
-                case 'system': {
+                case 'downloadmenu': {
                     const startTime = socketCreationTime.get(number) || Date.now();
                     const uptime = Math.floor((Date.now() - startTime) / 1000);
                     const hours = Math.floor(uptime / 3600);
                     const minutes = Math.floor((uptime % 3600) / 60);
                     const seconds = Math.floor(uptime % 60);
-                        
-                    const title = '*🔰 WHITESHADOW-MD System 💥*';
-                    const content = `┏━━━━━━━━━━━━━━━━\n` +
-                        `┃🤖 \`ʙᴏᴛ ɴᴀᴍᴇ\` : ${config.BOT_NAME}\n` +
-                        `┃🔖 \`ᴠᴇʀsɪᴏɴ\` : ${config.BOT_VERSION}\n` +
-                        `┃📡 \`ᴘʟᴀᴛꜰᴏʀᴍ\` : Heroku\n` +
-                        `┃🪢 \`ʀᴜɴᴛɪᴍᴇ\` : ${hours}h ${minutes}m ${seconds}s\n` +
-                        `┃👨‍💻 \`ᴏᴡɴᴇʀ\` : ${config.OWNER_NAME}\n` +
-                        `┗━━━━━━━━━━━━━━━━`;
+
+                    await socket.sendMessage(sender, { 
+                        react: { 
+                            text: "⬇️",
+                            key: msg.key 
+                        } 
+                    });
+
+                    const kariyane = `┏━❐  \`H E L L O W\`
+┃ *⭔ Itz:* WHITESHADOW-M
+┃ *⭔ Type:* MINI BOT
+┃ *⭔ Platform:* Heroku
+┃ *⭔ UpTime:* ${hours}h ${minutes}m ${seconds}s
+┗━❐
+
+┏━❐
+┃ ⭔| song
+┃ ⭔| video
+┃ ⭔| fb
+┃ ⭔| ig
+┃ ⭔| tiktok
+┃ ⭔| mediafire
+┃ ⭔| apk
+┃ ⭔| gdrive
+┗━❐
+
+*│➤ ABOUT*
+│ ◦ Check bot = ping
+│ ◦ ConnectUs = owner
+│ ◦ deploy = www.google.com`;
+
+                    const sentMsg = await socket.sendMessage(sender, {
+                        image: { url: "https://files.catbox.moe/fj19m9.jpg"},
+                        caption: kariyane,
+                        contextInfo: {
+                            mentionedJid: ['94765635699@s.whatsapp.net'],
+                            groupMentions: [],
+                            forwardingScore: 999,
+                            isForwarded: false,
+                            forwardedNewsletterMessageInfo: {
+                                newsletterJid: '120363317972190466@newsletter@newsletter',
+                                newsletterName: "WHITESHADOW SUPPORT 🎀",
+                                serverMessageId: 999
+                            },
+                            externalAdReply: {
+                                title: 'ᴀ ᴍᴜʟᴛɪ ᴅᴇᴠɪᴄᴇ ᴍɪɴɪ ᴡʜᴀᴛꜱᴀᴘᴘ ʙᴏᴛ ®',
+                                body: '@WHITESHADOW-MINI 🧼',
+                                mediaType: 1,
+                                sourceUrl: "https://zeus-mini-bot-7ceefd15b263.herokuapp.com/",
+                                thumbnailUrl: 'https://cdn.yupra.my.id/yp/fhpkqv8a.jpg',
+                                renderLargerThumbnail: false,
+                                showAdAttribution: false
+                            }
+                        }
+                    });
+                    break;
+                }
+                case 'ping': {
+                    var inital = new Date().getTime();
+                    let ping = await socket.sendMessage(sender, { text: '*_Pinging to whiteshadow Module..._* ❗' });
+                    var final = new Date().getTime();
+                    await socket.sendMessage(sender, { text: '《 █▒▒▒▒▒▒▒▒▒▒▒》10%', edit: ping.key });
+                    await socket.sendMessage(sender, { text: '《 ████▒▒▒▒▒▒▒▒》30%', edit: ping.key });
+                    await socket.sendMessage(sender, { text: '《 ███████▒▒▒▒▒》50%', edit: ping.key });
+                    await socket.sendMessage(sender, { text: '《 ██████████▒▒》80%', edit: ping.key });
+                    await socket.sendMessage(sender, { text: '《 ████████████》100%', edit: ping.key });
+
+                    return await socket.sendMessage(sender, {
+                        text: '☁ *Pong '+ (final - inital) + ' Ms*', edit: ping.key });
+                }
+                case 'owner': {
+                    await socket.sendMessage(sender, { 
+                        react: { 
+                            text: "👤",
+                            key: msg.key 
+                        } 
+                    });
+                    
+                    const ownerContact = {
+                        contacts: {
+                            displayName: 'My Contacts',
+                            contacts: [
+                                {
+                                    vcard: 'BEGIN:VCARD\nVERSION:3.0\nFN;CHARSET=UTF-8:Whiteshadow\nTEL;TYPE=Coder,VOICE:94704896880\nEND:VCARD',
+                                },
+                                {
+                                    vcard: 'BEGIN:VCARD\nVERSION:3.0\nFN;CHARSET=UTF-8:chamod\nTEL;TYPE=Coder,VOICE:94765635699\nEND:VCARD',
+                                },
+                            ],
+                        },
+                    };
+
+                    const ownerLocation = {
+                        location: {
+                            degreesLatitude: 37.7749,
+                            degreesLongitude: -122.4194,
+                            name: 'Address',
+                            address: 'Galewela, SriLanka',
+                        },
+                    };
+
+                    await socket.sendMessage(sender, ownerContact);
+                    await socket.sendMessage(sender, ownerLocation);
+                    break;
+                }
+                case 'system': {
+                    const title = "乂 *S Y S T E M - I N F O*";
+                    let totalStorage = Math.floor(os.totalmem() / 1024 / 1024) + 'MB';
+                    let freeStorage = Math.floor(os.freemem() / 1024 / 1024) + 'MB';
+                    let cpuModel = os.cpus()[0].model;
+                    let cpuSpeed = os.cpus()[0].speed / 1000;
+                    let cpuCount = os.cpus().length;
+                    let hostname = os.hostname();
+
+                    let content = `
+  ◦ *Runtime*: ${runtime(process.uptime())}
+  ◦ *Os Name*: ${hostname}
+  ◦ *Total Ram*: ${totalStorage}
+  ◦ *Free Ram*: ${freeStorage}
+  ◦ *CPU Model*: ${cpuModel}
+  ◦ *CPU Speed*: ${cpuSpeed} GHz
+  ◦ *Number of CPU Cores*: ${cpuCount} 
+`;
+
                     const footer = config.BOT_FOOTER;
 
                     await socket.sendMessage(sender, {
-                        image: { url: config.IMAGE_PATH },
+                        image: { url: `https://cdn.yupra.my.id/yp/niilhpj7.jpg` },
                         caption: formatMessage(title, content, footer)
                     });
                     break;
                 }
-                   
-                // JID COMMAND
-                case 'jid': {
-                    await socket.sendMessage(sender, {
-                        text: `*🆔 Chat JID:* ${sender}`
-                    });
-                    break;
-                }
+                case 'fb': {
+                    const q = msg.message?.conversation || 
+                              msg.message?.extendedTextMessage?.text || 
+                              msg.message?.imageMessage?.caption || 
+                              msg.message?.videoMessage?.caption || '';
 
-                // BOOM COMMAND        
-                case 'boom': {
-                    if (args.length < 2) {
-                        return await socket.sendMessage(sender, { 
-                            text: "📛 *Usage:* `.boom <count> <message>`\n📌 *Example:* `.boom 100 Hello*`" 
-                        });
+                    const fbUrl = q?.trim();
+
+                    if (!/facebook\.com|fb\.watch/.test(fbUrl)) {
+                        return await socket.sendMessage(sender, { text: '🧩 *Please provide a valid Facebook video link.*' });
                     }
 
-                    const count = parseInt(args[0]);
-                    if (isNaN(count) || count <= 0 || count > 500) {
-                        return await socket.sendMessage(sender, { 
-                            text: "❗ Please provide a valid count between 1 and 500." 
-                        });
-                    }
+                    try {
+                        const res = await axios.get(`https://suhas-bro-api.vercel.app/download/fbdown?url=${encodeURIComponent(fbUrl)}`);
+                        const result = res.data.result;
 
-                    const message = args.slice(1).join(" ");
-                    for (let i = 0; i < count; i++) {
-                        await socket.sendMessage(sender, { text: message });
-                        await new Promise(resolve => setTimeout(resolve, 500)); // Optional delay
-                    }
+                        await socket.sendMessage(sender, { react: { text: '⬇', key: msg.key } });
 
-                    break;
-                }
-
-                // SONG DOWNLOAD COMMAND WITH BUTTON
-                case 'song': {
-    try {
-        const text = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').trim();
-        const q = text.split(" ").slice(1).join(" ").trim();
-
-        if (!q) {
-            await socket.sendMessage(sender, { 
-                text: '*🚫 Please enter a song name to search.*',
-                buttons: [
-                    { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: '📋 MENU' }, type: 1 }
-                ]
-            });
-            return;
-        }
-
-        // API CALL - Nekolabs
-        const apiUrl = `https://api.nekolabs.my.id/downloader/youtube/play/v1?q=${encodeURIComponent(q)}`;
-        const response = await fetch(apiUrl);
-        const data = await response.json();
-
-        if (!data.status || !data.result) {
-            await socket.sendMessage(sender, { 
-                text: '*🚩 Result Not Found or API Error.*',
-                buttons: [
-                    { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: '📋 MENU' }, type: 1 }
-                ]
-            });
-            return;
-        }
-
-        const { title, channel, duration, cover, url } = data.result.metadata;
-        const downloadUrl = data.result.downloadUrl;
-
-        const titleText = '*༊ WHITESHADOW-MINI SONG DOWNLOADER*';
-        const content = `┏━━━━━━━━━━━━━━━━\n` +
-            `┃📝 \`Title\` : ${title}\n` +
-            `┃📺 \`Channel\` : ${channel}\n` +
-            `┃🕛 \`Duration\` : ${duration}\n` +
-            `┃🔗 \`URL\` : ${url}\n` +
-            `┗━━━━━━━━━━━━━━━━`;
-
-        const footer = config.BOT_FOOTER || '';
-        const captionMessage = formatMessage(titleText, content, footer);
-
-        // Song Info Card
-        await socket.sendMessage(sender, {
-            image: { url: cover },
-            caption: captionMessage,
-            buttons: [
-                { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: '📋 MENU' }, type: 1 },
-                { buttonId: `${config.PREFIX}alive`, buttonText: { displayText: '🤖 BOT INFO' }, type: 1 }
-            ]
-        });
-
-        // Send Audio
-        await socket.sendMessage(sender, {
-            audio: { url: downloadUrl },
-            mimetype: 'audio/mpeg'
-        });
-
-        // Send as Document too
-        await socket.sendMessage(sender, {
-            document: { url: downloadUrl },
-            mimetype: "audio/mpeg",
-            fileName: `${title}.mp3`,
-            caption: captionMessage
-        });
-
-    } catch (err) {
-        console.error(err);
-        await socket.sendMessage(sender, { 
-            text: '*❌ Internal Error. Please try again later.*',
-            buttons: [
-                { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: '📋 MENU' }, type: 1 }
-            ]
-        });
-    }
-    break;
-}
-                
-                // NEWS COMMAND
-                case 'news': {
-                    await socket.sendMessage(sender, {
-                        text: '📰 Fetching latest news...'
-                    });
-                    const newsItems = await fetchNews();
-                    if (newsItems.length === 0) {
                         await socket.sendMessage(sender, {
-                            image: { url: config.IMAGE_PATH },
-                            caption: formatMessage(
-                                '🗂️ NO NEWS AVAILABLE',
-                                '❌ No news updates found at the moment. Please try again later.',
-                                `${config.BOT_FOOTER}`
-                            )
-                        });
-                    } else {
-                        await SendSlide(socket, sender, newsItems.slice(0, 5));
+                            video: { url: result.sd },
+                            mimetype: 'video/mp4',
+                            caption: '> > ©powered by whiteshadow'
+                        }, { quoted: msg });
+
+                        await socket.sendMessage(sender, { react: { text: '✔', key: msg.key } });
+
+                    } catch (e) {
+                        console.log(e);
+                        await socket.sendMessage(sender, { text: '*❌ Error downloading video.*' });
+                    }
+                    break;
+                }
+                case 'pair': {
+                    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+                    const q = msg.message?.conversation ||
+                              msg.message?.extendedTextMessage?.text ||
+                              msg.message?.imageMessage?.caption ||
+                              msg.message?.videoMessage?.caption || '';
+
+                    const number = q.replace(/^[.\/!]pair\s*/i, '').trim();
+
+                    if (!number) {
+                        return await socket.sendMessage(sender, {
+                            text: '*📌 Usage:* .pair +9476066XXXX'
+                        }, { quoted: msg });
+                    }
+
+                    try {
+                        const url = `https://zeus-mini-079bc98a7e44.herokuapp.com/code?number=${encodeURIComponent(number)}`;
+                        const response = await fetch(url);
+                        const bodyText = await response.text();
+
+                        console.log("🌐 API Response:", bodyText);
+
+                        let result;
+                        try {
+                            result = JSON.parse(bodyText);
+                        } catch (e) {
+                            console.error("❌ JSON Parse Error:", e);
+                            return await socket.sendMessage(sender, {
+                                text: '❌ Invalid response from server. Please contact support.'
+                            }, { quoted: msg });
+                        }
+
+                        if (!result || !result.code) {
+                            return await socket.sendMessage(sender, {
+                                text: '❌ Failed to retrieve pairing code. Please check the number.'
+                            }, { quoted: msg });
+                        }
+
+                        await socket.sendMessage(sender, {
+                            text: `> *WHITESHADOW- ＭＤ ＭＩＮＩ ＢＯＴ ＰＡＩＲ ＣＯＭＰＬＥＴＥ* ✅\n\n*🔑 Your pairing code is:* ${result.code}`
+                        }, { quoted: msg });
+
+                        await sleep(2000);
+
+                        await socket.sendMessage(sender, {
+                            text: `${result.code}`
+                        }, { quoted: msg });
+
+                    } catch (err) {
+                        console.error("❌ Pair Command Error:", err);
+                        await socket.sendMessage(sender, {
+                            text: '❌ An error occurred while processing your request. Please try again later.'
+                        }, { quoted: msg });
+                    }
+                    break;
+                }
+                case 'song': {
+                    function extractYouTubeId(url) {
+                        const regex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+                        const match = url.match(regex);
+                        return match ? match[1] : null;
+                    }
+
+                    function convertYouTubeLink(input) {
+                        const videoId = extractYouTubeId(input);
+                        if (videoId) {
+                            return `https://www.youtube.com/watch?v=${videoId}`;
+                        }
+                        return input;
+                    }
+
+                    const q = msg.message?.conversation || 
+                              msg.message?.extendedTextMessage?.text || 
+                              msg.message?.imageMessage?.caption || 
+                              msg.message?.videoMessage?.caption || '';
+
+                    if (!q || q.trim() === '') {
+                        return await socket.sendMessage(sender, { text: '*`Need YT_URL or Title`*' });
+                    }
+
+                    const fixedQuery = convertYouTubeLink(q.trim());
+
+                    try {
+                        const sanitizedNumber = number.replace(/[^0-9]/g, '');
+
+                        const search = await yts(fixedQuery);
+                        const data = search.videos[0];
+                        if (!data) {
+                            return await socket.sendMessage(sender, { text: '*`No results found`*' });
+                        }
+
+                        const url = data.url;
+                        const desc = `
+🎵 *𝚃𝚒𝚝𝚕𝚎 :* \`${data.title}\`
+
+◆⏱️ *𝙳𝚞𝚛𝚊𝚝𝚒𝚘𝚗* : ${data.timestamp} 
+
+◆ *𝚅𝚒𝚎𝚠𝚜* : ${data.views}
+
+◆ 📅 *𝚁𝚎𝚕𝚎𝚊𝚜 𝙳𝚊𝚝𝚎* : ${data.ago}
+
+> © Zeus
+`;
+
+                        await socket.sendMessage(sender, {
+                            image: { url: data.thumbnail },
+                            caption: desc,
+                        }, { quoted: msg });
+
+                        await socket.sendMessage(sender, { react: { text: '⬇️', key: msg.key } });
+
+                        const result = await ddownr.download(url, 'mp3');
+                        const downloadLink = result.downloadUrl;
+
+                        await socket.sendMessage(sender, { react: { text: '⬆️', key: msg.key } });
+
+                        await socket.sendMessage(sender, {
+                            audio: { url: downloadLink },
+                            mimetype: "audio/mpeg",
+                            ptt: true
+                        }, { quoted: msg });
+
+                    } catch (err) {
+                        console.error(err);
+                        await socket.sendMessage(sender, { text: "*`Error occurred while downloading`*" });
                     }
                     break;
                 }
@@ -924,127 +795,75 @@ function setupMessageHandlers(socket) {
     });
 }
 
-// Delete session from GitHub
-async function deleteSessionFromGitHub(number) {
+// Delete session from MongoDB
+async function deleteSessionFromMongo(number) {
     try {
         const sanitizedNumber = number.replace(/[^0-9]/g, '');
-        const { data } = await octokit.repos.getContent({
-            owner,
-            repo,
-            path: 'session'
-        });
-
-        const sessionFiles = data.filter(file =>
-            file.name.includes(sanitizedNumber) && file.name.endsWith('.json')
-        );
-
-        for (const file of sessionFiles) {
-            await octokit.repos.deleteFile({
-                owner,
-                repo,
-                path: `session/${file.name}`,
-                message: `Delete session for ${sanitizedNumber}`,
-                sha: file.sha
-            });
-        }
+        const db = await initMongo();
+        const collection = db.collection('sessions');
+        await collection.deleteOne({ number: sanitizedNumber });
+        console.log(`Deleted session for ${sanitizedNumber} from MongoDB`);
     } catch (error) {
-        console.error('Failed to delete session from GitHub:', error);
+        console.error('Failed to delete session from MongoDB:', error);
     }
 }
 
-// Restore session from GitHub
+// Rename creds on logout
+async function renameCredsOnLogout(number) {
+    try {
+        const sanitizedNumber = number.replace(/[^0-9]/g, '');
+        const db = await initMongo();
+        const collection = db.collection('sessions');
+
+        const count = (await collection.countDocuments({ active: false })) + 1;
+
+        await collection.updateOne(
+            { number: sanitizedNumber },
+            {
+                $rename: { "creds": `delete_creds${count}` },
+                $set: { active: false }
+            }
+        );
+        console.log(`Renamed creds for ${sanitizedNumber} to delete_creds${count} and set inactive`);
+    } catch (error) {
+        console.error('Failed to rename creds on logout:', error);
+    }
+}
+
+// Restore session from MongoDB
 async function restoreSession(number) {
     try {
         const sanitizedNumber = number.replace(/[^0-9]/g, '');
-        const { data } = await octokit.repos.getContent({
-            owner,
-            repo,
-            path: 'session'
-        });
-
-        const sessionFiles = data.filter(file =>
-            file.name === `creds_${sanitizedNumber}.json`
-        );
-
-        if (sessionFiles.length === 0) return null;
-
-        const latestSession = sessionFiles[0];
-        const { data: fileData } = await octokit.repos.getContent({
-            owner,
-            repo,
-            path: `session/${latestSession.name}`
-        });
-
-        const content = Buffer.from(fileData.content, 'base64').toString('utf8');
-        return JSON.parse(content);
+        const db = await initMongo();
+        const collection = db.collection('sessions');
+        const doc = await collection.findOne({ number: sanitizedNumber, active: true });
+        if (!doc) return null;
+        return JSON.parse(doc.creds);
     } catch (error) {
         console.error('Session restore failed:', error);
         return null;
     }
 }
 
-// Load user config
-async function loadUserConfig(number) {
-    try {
-        const sanitizedNumber = number.replace(/[^0-9]/g, '');
-        const configPath = `session/config_${sanitizedNumber}.json`;
-        const { data } = await octokit.repos.getContent({
-            owner,
-            repo,
-            path: configPath
-        });
-
-        const content = Buffer.from(data.content, 'base64').toString('utf8');
-        return JSON.parse(content);
-    } catch (error) {
-        console.warn(`No configuration found for ${number}, using default config`);
-        return { ...config };
-    }
-}
-
-// Update user config
-async function updateUserConfig(number, newConfig) {
-    try {
-        const sanitizedNumber = number.replace(/[^0-9]/g, '');
-        const configPath = `session/config_${sanitizedNumber}.json`;
-        let sha;
-
-        try {
-            const { data } = await octokit.repos.getContent({
-                owner,
-                repo,
-                path: configPath
-            });
-            sha = data.sha;
-        } catch (error) {
-        }
-
-        await octokit.repos.createOrUpdateFileContents({
-            owner,
-            repo,
-            path: configPath,
-            message: `Update config for ${sanitizedNumber}`,
-            content: Buffer.from(JSON.stringify(newConfig, null, 2)).toString('base64'),
-            sha
-        });
-        console.log(`Updated config for ${sanitizedNumber}`);
-    } catch (error) {
-        console.error('Failed to update config:', error);
-        throw error;
-    }
-}
-
 // Setup auto restart
 function setupAutoRestart(socket, number) {
+    const sanitizedNumber = number.replace(/[^0-9]/g, '');
     socket.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update;
-        if (connection === 'close' && lastDisconnect?.error?.output?.statusCode !== 401) {
-            console.log(`Connection lost for ${number}, attempting to reconnect...`);
-            await delay(10000);
-            activeSockets.delete(number.replace(/[^0-9]/g, ''));
-            socketCreationTime.delete(number.replace(/[^0-9]/g, ''));
-            const mockRes = { headersSent: false, send: () => {}, status: () => mockRes };
-            await EmpirePair(number, mockRes);
+        if (connection === 'close') {
+            const statusCode = lastDisconnect?.error?.output?.statusCode;
+            if (statusCode === 401) {
+                console.log(`Connection closed due to logout for ${number}`);
+                await renameCredsOnLogout(number);
+                activeSockets.delete(sanitizedNumber);
+                socketCreationTime.delete(sanitizedNumber);
+            } else {
+                console.log(`Connection lost for ${number}, attempting to reconnect...`);
+                activeSockets.delete(sanitizedNumber);
+                socketCreationTime.delete(sanitizedNumber);
+                const mockRes = { headersSent: false, send: () => {}, status: () => mockRes };
+                await EmpirePair(number, mockRes);
+            }
         }
     });
 }
@@ -1053,16 +872,14 @@ function setupAutoRestart(socket, number) {
 async function EmpirePair(number, res) {
     const sanitizedNumber = number.replace(/[^0-9]/g, '');
     await initUserEnvIfMissing(sanitizedNumber);
-  await initEnvsettings(sanitizedNumber);
+    await initEnvsettings(sanitizedNumber);
   
     const sessionPath = path.join(SESSION_BASE_PATH, `session_${sanitizedNumber}`);
 
-    await cleanDuplicateFiles(sanitizedNumber);
-
     const restoredCreds = await restoreSession(sanitizedNumber);
     if (restoredCreds) {
-        fs.ensureDirSync(sessionPath);
-        fs.writeFileSync(path.join(sessionPath, 'creds.json'), JSON.stringify(restoredCreds, null, 2));
+        await fs.ensureDir(sessionPath);
+        await fs.writeFile(path.join(sessionPath, 'creds.json'), JSON.stringify(restoredCreds, null, 2));
         console.log(`Successfully restored session for ${sanitizedNumber}`);
     }
 
@@ -1106,31 +923,32 @@ async function EmpirePair(number, res) {
             if (!res.headersSent) {
                 res.send({ code });
             }
+        } else {
+            if (!res.headersSent) {
+                res.send({ status: 'already_paired', message: 'Session restored and connecting' });
+            }
         }
 
         socket.ev.on('creds.update', async () => {
             await saveCreds();
             const fileContent = await fs.readFile(path.join(sessionPath, 'creds.json'), 'utf8');
-            let sha;
-            try {
-                const { data } = await octokit.repos.getContent({
-                    owner,
-                    repo,
-                    path: `session/creds_${sanitizedNumber}.json`
-                });
-                sha = data.sha;
-            } catch (error) {
-            }
-
-            await octokit.repos.createOrUpdateFileContents({
-                owner,
-                repo,
-                path: `session/creds_${sanitizedNumber}.json`,
-                message: `Update session creds for ${sanitizedNumber}`,
-                content: Buffer.from(fileContent).toString('base64'),
-                sha
-            });
-            console.log(`Updated creds for ${sanitizedNumber} in GitHub`);
+            const db = await initMongo();
+            const collection = db.collection('sessions');
+            const sessionId = uuidv4();
+            await collection.updateOne(
+                { number: sanitizedNumber },
+                {
+                    $set: {
+                        sessionId,
+                        number: sanitizedNumber,
+                        creds: fileContent,
+                        active: true,
+                        updatedAt: new Date()
+                    }
+                },
+                { upsert: true }
+            );
+            console.log(`Saved creds for ${sanitizedNumber} with sessionId ${sessionId} in MongoDB`);
         });
 
         socket.ev.on('connection.update', async (update) => {
@@ -1147,12 +965,6 @@ async function EmpirePair(number, res) {
                         console.log('✅ Auto-followed newsletter & reacted ❤️');
                     } catch (error) {
                         console.error('❌ Newsletter error:', error.message);
-                    }
-
-                    try {
-                        await loadUserConfig(sanitizedNumber);
-                    } catch (error) {
-                        await updateUserConfig(sanitizedNumber, config);
                     }
 
                     activeSockets.set(sanitizedNumber, socket);
@@ -1181,7 +993,7 @@ async function EmpirePair(number, res) {
                     }
                 } catch (error) {
                     console.error('Connection error:', error);
-                    exec(`pm2 restart ${process.env.PM2_NAME || 'WHITESHADOW-Md-Free-Bot-Session'}`);
+                    exec(`pm2 restart ${process.env.PM2_NAME || 'cnw-Md-Free-Bot-Session'}`);
                 }
             }
         });
@@ -1196,16 +1008,28 @@ async function EmpirePair(number, res) {
 
 // Routes
 router.get('/', async (req, res) => {
-    const { number } = req.query;
+    const { number, force } = req.query;
     if (!number) {
         return res.status(400).send({ error: 'Number parameter is required' });
     }
 
-    if (activeSockets.has(number.replace(/[^0-9]/g, ''))) {
+    const forceRepair = force === 'true';
+    const sanitizedNumber = number.replace(/[^0-9]/g, '');
+
+    if (activeSockets.has(sanitizedNumber)) {
         return res.status(200).send({
             status: 'already_connected',
             message: 'This number is already connected'
         });
+    }
+
+    if (forceRepair) {
+        const sessionPath = path.join(SESSION_BASE_PATH, `session_${sanitizedNumber}`);
+        await deleteSessionFromMongo(sanitizedNumber);
+        if (fs.existsSync(sessionPath)) {
+            await fs.remove(sessionPath);
+        }
+        console.log(`Forced re-pair for ${sanitizedNumber}: deleted old session`);
     }
 
     await EmpirePair(number, res);
@@ -1238,6 +1062,7 @@ router.get('/connect-all', async (req, res) => {
         }
 
         const results = [];
+        const promises = [];
         for (const number of numbers) {
             if (activeSockets.has(number)) {
                 results.push({ number, status: 'already_connected' });
@@ -1245,9 +1070,15 @@ router.get('/connect-all', async (req, res) => {
             }
 
             const mockRes = { headersSent: false, send: () => {}, status: () => mockRes };
-            await EmpirePair(number, mockRes);
-            results.push({ number, status: 'connection_initiated' });
+            promises.push(
+                EmpirePair(number, mockRes)
+                    .then(() => ({ number, status: 'connection_initiated' }))
+                    .catch(error => ({ number, status: 'failed', error: error.message }))
+            );
         }
+
+        const promiseResults = await Promise.all(promises);
+        results.push(...promiseResults);
 
         res.status(200).send({
             status: 'success',
@@ -1261,45 +1092,33 @@ router.get('/connect-all', async (req, res) => {
 
 router.get('/reconnect', async (req, res) => {
     try {
-        const { data } = await octokit.repos.getContent({
-            owner,
-            repo,
-            path: 'session'
-        });
+        const db = await initMongo();
+        const collection = db.collection('sessions');
+        const docs = await collection.find({ active: true }).toArray();
 
-        const sessionFiles = data.filter(file => 
-            file.name.startsWith('creds_') && file.name.endsWith('.json')
-        );
-
-        if (sessionFiles.length === 0) {
-            return res.status(404).send({ error: 'No session files found in GitHub repository' });
+        if (docs.length === 0) {
+            return res.status(404).send({ error: 'No active sessions found in MongoDB' });
         }
 
         const results = [];
-        for (const file of sessionFiles) {
-            const match = file.name.match(/creds_(\d+)\.json/);
-            if (!match) {
-                console.warn(`Skipping invalid session file: ${file.name}`);
-                results.push({ file: file.name, status: 'skipped', reason: 'invalid_file_name' });
-                continue;
-            }
-
-            const number = match[1];
+        const promises = [];
+        for (const doc of docs) {
+            const number = doc.number;
             if (activeSockets.has(number)) {
                 results.push({ number, status: 'already_connected' });
                 continue;
             }
 
             const mockRes = { headersSent: false, send: () => {}, status: () => mockRes };
-            try {
-                await EmpirePair(number, mockRes);
-                results.push({ number, status: 'connection_initiated' });
-            } catch (error) {
-                console.error(`Failed to reconnect bot for ${number}:`, error);
-                results.push({ number, status: 'failed', error: error.message });
-            }
-            await delay(1000);
+            promises.push(
+                EmpirePair(number, mockRes)
+                    .then(() => ({ number, status: 'connection_initiated' }))
+                    .catch(error => ({ number, status: 'failed', error: error.message }))
+            );
         }
+
+        const promiseResults = await Promise.all(promises);
+        results.push(...promiseResults);
 
         res.status(200).send({
             status: 'success',
@@ -1308,79 +1127,6 @@ router.get('/reconnect', async (req, res) => {
     } catch (error) {
         console.error('Reconnect error:', error);
         res.status(500).send({ error: 'Failed to reconnect bots' });
-    }
-});
-
-router.get('/update-config', async (req, res) => {
-    const { number, config: configString } = req.query;
-    if (!number || !configString) {
-        return res.status(400).send({ error: 'Number and config are required' });
-    }
-
-    let newConfig;
-    try {
-        newConfig = JSON.parse(configString);
-    } catch (error) {
-        return res.status(400).send({ error: 'Invalid config format' });
-    }
-
-    const sanitizedNumber = number.replace(/[^0-9]/g, '');
-    const socket = activeSockets.get(sanitizedNumber);
-    if (!socket) {
-        return res.status(404).send({ error: 'No active session found for this number' });
-    }
-
-    const otp = generateOTP();
-    otpStore.set(sanitizedNumber, { otp, expiry: Date.now() + config.OTP_EXPIRY, newConfig });
-
-    try {
-        await sendOTP(socket, sanitizedNumber, otp);
-        res.status(200).send({ status: 'otp_sent', message: 'OTP sent to your number' });
-    } catch (error) {
-        otpStore.delete(sanitizedNumber);
-        res.status(500).send({ error: 'Failed to send OTP' });
-    }
-});
-
-router.get('/verify-otp', async (req, res) => {
-    const { number, otp } = req.query;
-    if (!number || !otp) {
-        return res.status(400).send({ error: 'Number and OTP are required' });
-    }
-
-    const sanitizedNumber = number.replace(/[^0-9]/g, '');
-    const storedData = otpStore.get(sanitizedNumber);
-    if (!storedData) {
-        return res.status(400).send({ error: 'No OTP request found for this number' });
-    }
-
-    if (Date.now() >= storedData.expiry) {
-        otpStore.delete(sanitizedNumber);
-        return res.status(400).send({ error: 'OTP has expired' });
-    }
-
-    if (storedData.otp !== otp) {
-        return res.status(400).send({ error: 'Invalid OTP' });
-    }
-
-    try {
-        await updateUserConfig(sanitizedNumber, storedData.newConfig);
-        otpStore.delete(sanitizedNumber);
-        const socket = activeSockets.get(sanitizedNumber);
-        if (socket) {
-            await socket.sendMessage(jidNormalizedUser(socket.user.id), {
-                image: { url: config.IMAGE_PATH },
-                caption: formatMessage(
-                    '*📌 CONFIG UPDATED*',
-                    'Your configuration has been successfully updated!',
-                    `${config.BOT_FOOTER}`
-                )
-            });
-        }
-        res.status(200).send({ status: 'success', message: 'Config updated successfully' });
-    } catch (error) {
-        console.error('Failed to update config:', error);
-        res.status(500).send({ error: 'Failed to update config' });
     }
 });
 
@@ -1424,11 +1170,35 @@ process.on('exit', () => {
         socketCreationTime.delete(number);
     });
     fs.emptyDirSync(SESSION_BASE_PATH);
+    client.close();
 });
 
-process.on('uncaughtException', (err) => {
+process.on('uncaughtException', async (err) => {
     console.error('Uncaught exception:', err);
     exec(`pm2 restart ${process.env.PM2_NAME || 'BOT-session'}`);
 });
+
+// Auto-reconnect on startup
+(async () => {
+    try {
+        await initMongo();
+        const collection = db.collection('sessions');
+        const docs = await collection.find({ active: true }).toArray();
+        for (const doc of docs) {
+            const number = doc.number;
+            if (!activeSockets.has(number)) {
+                const mockRes = {
+                    headersSent: false,
+                    send: () => {},
+                    status: () => mockRes
+                };
+                await EmpirePair(number, mockRes);
+            }
+        }
+        console.log('Auto-reconnect completed on startup');
+    } catch (error) {
+        console.error('Failed to auto-reconnect on startup:', error);
+    }
+})();
 
 module.exports = router;
