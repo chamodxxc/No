@@ -20,6 +20,8 @@
     "denethdev-ytmp3":"1.0.3",
     "yt-search": "2.12.1",
     "path": "^0.12.7",
+    "mongodb":"^6.18.0",
+    "uuid":"^11.1.0",
     "axios": "^1.2.5",
     "yt-search": "2.12.1",
     "moment-timezone": "^0.6.0"
@@ -32,8 +34,8 @@
     "bot",
     "multi-device",
     "baileys",
-    "CNW-md"
+    "shala-md"
   ],
-  "author": "CHAMOD",
+  "author": "Chamod",
   "license": "MIT"
 }
