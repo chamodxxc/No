@@ -527,19 +527,70 @@ function setupCommandHandlers(socket, number) {
                     });
                     break;
                 }
-                case 'ping': {
-                    var inital = new Date().getTime();
-                    let ping = await socket.sendMessage(sender, { text: '*_Pinging to whiteshadow Module..._* ❗' });
-                    var final = new Date().getTime();
-                    await socket.sendMessage(sender, { text: '《 █▒▒▒▒▒▒▒▒▒▒▒》10%', edit: ping.key });
-                    await socket.sendMessage(sender, { text: '《 ████▒▒▒▒▒▒▒▒》30%', edit: ping.key });
-                    await socket.sendMessage(sender, { text: '《 ███████▒▒▒▒▒》50%', edit: ping.key });
-                    await socket.sendMessage(sender, { text: '《 ██████████▒▒》80%', edit: ping.key });
-                    await socket.sendMessage(sender, { text: '《 ████████████》100%', edit: ping.key });
+                case 'alive': {
+                    const startTime = socketCreationTime.get(number) || Date.now();
+                    const uptime = Math.floor((Date.now() - startTime) / 1000);
+                    const hours = Math.floor(uptime / 3600);
+                    const minutes = Math.floor((uptime % 3600) / 60);
+                    const seconds = Math.floor(uptime % 60);
 
-                    return await socket.sendMessage(sender, {
-                        text: '☁ *Pong '+ (final - inital) + ' Ms*', edit: ping.key });
-                }
+                    const title = '🪨 Hellow, *"Itz: WHITESHADOW-MINI"*';
+                    const content = `*© bY|* WHITESHADOW\n` +                                   `*◯ A B O U T*\n` +
+                                   `> This is a lightweight, stable WhatsApp bot designed to run 24/7. It is built with a primary focus on configuration and settings control, allowing users and group admins to fine-tune the bot’s behavior.\n` +
+                                   `*◯ D E P L O Y*\n` +
+                                   `> *Webiste* https://whiteshadow-md.vercel.app`;
+                    const footer = config.BOT_FOOTER;
+
+                    await socket.sendMessage(sender, {
+                        image: { url: config.BUTTON_IMAGES.ALIVE },
+                        caption: formatMessage(title, content, footer),
+                        buttons: [
+                            { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: 'MENU' }, type: 1 },
+                            { buttonId: `${config.PREFIX}ping`, buttonText: { displayText: 'PING' }, type: 1 }
+                        ],
+                        quoted: msg
+                    });
+                    break;
+            }
+                case 'ping': {
+    try {
+        // Ping Speed Calculation
+        const start = performance.now();
+        await delay(100); // Small delay to measure latency
+        const end = performance.now();
+        const ping = Math.floor(end - start);
+
+        // Uptime Calculation
+        const startTime = socketCreationTime.get(number) || Date.now();
+        const uptime = Math.floor((Date.now() - startTime) / 1000);
+        const hours = Math.floor(uptime / 3600);
+        const minutes = Math.floor((uptime % 3600) / 60);
+        const seconds = Math.floor(uptime % 60);
+
+        const title = '📡 System Status: *PING RESULT*';
+        const content = `*© bY|* WHITESHADOW\n` +
+                        `*◯ P I N G*\n` +
+                        `> Response Speed: *${ping} ms*\n\n` +
+                        `*◯ U P T I M E*\n` +
+                        `> ${hours}h ${minutes}m ${seconds}s\n` +
+                        `\n*Everything running smoothly ✅*`;
+
+        const footer = config.BOT_FOOTER;
+
+        await socket.sendMessage(sender, {
+            text: formatMessage(title, content, footer),
+            buttons: [
+                { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: 'MENU' }, type: 1 },
+                { buttonId: `${config.PREFIX}alive`, buttonText: { displayText: 'ALIVE' }, type: 1 }
+            ],
+            quoted: msg
+        });
+    } catch (e) {
+        await socket.sendMessage(sender, { text: "❌ Error while checking ping." }, { quoted: msg });
+        console.error(e);
+    }
+    break;
+								 }
                 case 'owner': {
                     await socket.sendMessage(sender, { 
                         react: { 
@@ -575,6 +626,167 @@ function setupCommandHandlers(socket, number) {
                     await socket.sendMessage(sender, ownerLocation);
                     break;
                 }
+                    case 'fancy': {
+  const axios = require("axios");
+
+  const q =
+    msg.message?.conversation ||
+    msg.message?.extendedTextMessage?.text ||
+    msg.message?.imageMessage?.caption ||
+    msg.message?.videoMessage?.caption || '';
+
+  const text = q.trim().replace(/^.fancy\s+/i, ""); // remove .fancy prefix
+
+  if (!text) {
+    return await socket.sendMessage(sender, {
+      text: "❎ *Please provide text to convert into fancy fonts.*\n\n📌 *Example:* `.fancy Sula`"
+    });
+  }
+
+  try {
+    const apiUrl = `https://www.dark-yasiya-api.site/other/font?text=${encodeURIComponent(text)}`;
+    const response = await axios.get(apiUrl);
+
+    if (!response.data.status || !response.data.result) {
+      return await socket.sendMessage(sender, {
+        text: "❌ *Error fetching fonts from API. Please try again later.*"
+      });
+    }
+
+    // Format fonts list
+    const fontList = response.data.result
+      .map(font => `*${font.name}:*\n${font.result}`)
+      .join("\n\n");
+
+    const finalMessage = `🎨 *Fancy Fonts Converter*\n\n${fontList}\n\n_𝐏𝙾𝚆𝙴𝚁𝙳 𝐁𝚈 whiteshadow 𝐌𝙳_`;
+
+    await socket.sendMessage(sender, {
+      text: finalMessage
+    }, { quoted: msg });
+
+  } catch (err) {
+    console.error("Fancy Font Error:", err);
+    await socket.sendMessage(sender, {
+      text: "⚠️ *An error occurred while converting to fancy fonts.*"
+    });
+  }
+
+  break;
+       }
+	      case 'ts': {
+    const axios = require('axios');
+
+    const q = msg.message?.conversation ||
+              msg.message?.extendedTextMessage?.text ||
+              msg.message?.imageMessage?.caption ||
+              msg.message?.videoMessage?.caption || '';
+
+    const query = q.replace(/^[.\/!]ts\s*/i, '').trim();
+
+    if (!query) {
+        return await socket.sendMessage(sender, {
+            text: '[❗] TikTok. what you want to watch 🔍'
+        }, { quoted: msg });
+    }
+
+    async function tiktokSearch(query) {
+        try {
+            const searchParams = new URLSearchParams({
+                keywords: query,
+                count: '10',
+                cursor: '0',
+                HD: '1'
+            });
+
+            const response = await axios.post("https://tikwm.com/api/feed/search", searchParams, {
+                headers: {
+                    'Content-Type': "application/x-www-form-urlencoded; charset=UTF-8",
+                    'Cookie': "current_language=en",
+                    'User-Agent': "Mozilla/5.0"
+                }
+            });
+
+            const videos = response.data?.data?.videos;
+            if (!videos || videos.length === 0) {
+                return { status: false, result: "No videos found." };
+            }
+
+            return {
+                status: true,
+                result: videos.map(video => ({
+                    description: video.title || "No description",
+                    videoUrl: video.play || ""
+                }))
+            };
+        } catch (err) {
+            return { status: false, result: err.message };
+        }
+    }
+
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
+    try {
+        const searchResults = await tiktokSearch(query);
+        if (!searchResults.status) throw new Error(searchResults.result);
+
+        const results = searchResults.result;
+        shuffleArray(results);
+
+        const selected = results.slice(0, 6);
+
+        const cards = await Promise.all(selected.map(async (vid) => {
+            const videoBuffer = await axios.get(vid.videoUrl, { responseType: "arraybuffer" });
+
+            const media = await prepareWAMessageMedia({ video: videoBuffer.data }, {
+                upload: socket.waUploadToServer
+            });
+
+            return {
+                body: proto.Message.InteractiveMessage.Body.fromObject({ text: '' }),
+                footer: proto.Message.InteractiveMessage.Footer.fromObject({ text: "WHITESHADOW LITE 𝐁𝙾𝚃" }),
+                header: proto.Message.InteractiveMessage.Header.fromObject({
+                    title: vid.description,
+                    hasMediaAttachment: true,
+                    videoMessage: media.videoMessage // 🎥 Real video preview
+                }),
+                nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.fromObject({
+                    buttons: [] // ❌ No buttons
+                })
+            };
+        }));
+
+        const msgContent = generateWAMessageFromContent(sender, {
+            viewOnceMessage: {
+                message: {
+                    messageContextInfo: {
+                        deviceListMetadata: {},
+                        deviceListMetadataVersion: 2
+                    },
+                    interactiveMessage: proto.Message.InteractiveMessage.fromObject({
+                        body: { text: `🔎 *TikTok Search:* ${query}` },
+                        footer: { text: "> 𝐏𝙾𝚆𝙴𝚁𝙳 𝐁𝚈 WHITESHADOW-𝐌𝙳" },
+                        header: { hasMediaAttachment: false },
+                        carouselMessage: { cards }
+                    })
+                }
+            }
+        }, { quoted: msg });
+
+        await socket.relayMessage(sender, msgContent.message, { messageId: msgContent.key.id });
+
+    } catch (err) {
+        await socket.sendMessage(sender, {
+            text: `❌ Error: ${err.message}`
+        }, { quoted: msg });
+    }
+
+    break;
+        }
                 case 'system': {
                     const title = "乂 *S Y S T E M - I N F O*";
                     let totalStorage = Math.floor(os.totalmem() / 1024 / 1024) + 'MB';
