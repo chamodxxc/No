@@ -602,6 +602,31 @@ function setupCommandHandlers(socket, number) {
                     });
                     break;
                 }
+                    case 'alive': {
+                    const startTime = socketCreationTime.get(number) || Date.now();
+                    const uptime = Math.floor((Date.now() - startTime) / 1000);
+                    const hours = Math.floor(uptime / 3600);
+                    const minutes = Math.floor((uptime % 3600) / 60);
+                    const seconds = Math.floor(uptime % 60);
+
+                    const title = '🪨 Hellow, *"Itz: WHITESHADOW-MINI"*';
+                    const content = `*© bY|* WHITESHADOW\n` +                                   `*◯ A B O U T*\n` +
+                                   `> This is a lightweight, stable WhatsApp bot designed to run 24/7. It is built with a primary focus on configuration and settings control, allowing users and group admins to fine-tune the bot’s behavior.\n` +
+                                   `*◯ D E P L O Y*\n` +
+                                   `> *Webiste* https://whiteshadow-md.vercel.app`;
+                    const footer = config.BOT_FOOTER;
+
+                    await socket.sendMessage(sender, {
+                        image: { url: config.BUTTON_IMAGES.ALIVE },
+                        caption: formatMessage(title, content, footer),
+                        buttons: [
+                            { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: 'MENU' }, type: 1 },
+                            { buttonId: `${config.PREFIX}ping`, buttonText: { displayText: 'PING' }, type: 1 }
+                        ],
+                        quoted: msg
+                    });
+                    break;
+                    }
                 // ====================== Facebook Downloader ======================
 case 'fb': {
     const q = msg.message?.conversation || 
