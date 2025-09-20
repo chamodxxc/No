@@ -831,77 +831,81 @@ case 'tourl': {
     break;
 }
                 case 'song': {
-                    function extractYouTubeId(url) {
-                        const regex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/|v\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
-                        const match = url.match(regex);
-                        return match ? match[1] : null;
-                    }
+    try {
+        // Get the query text
+        const text = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').trim();
+        const q = text.split(" ").slice(1).join(" ").trim();
 
-                    function convertYouTubeLink(input) {
-                        const videoId = extractYouTubeId(input);
-                        if (videoId) {
-                            return `https://www.youtube.com/watch?v=${videoId}`;
-                        }
-                        return input;
-                    }
+        if (!q) {
+            return await socket.sendMessage(sender, { 
+                text: '*🚫 Please enter a song name or YouTube link.*',
+                buttons: [
+                    { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: '📋 MENU' }, type: 1 }
+                ]
+            });
+        }
 
-                    const q = msg.message?.conversation || 
-                              msg.message?.extendedTextMessage?.text || 
-                              msg.message?.imageMessage?.caption || 
-                              msg.message?.videoMessage?.caption || '';
+        // Call Nekolabs API
+        const apiUrl = `https://api.nekolabs.my.id/downloader/youtube/play/v1?q=${encodeURIComponent(q)}`;
+        const response = await fetch(apiUrl);
+        const data = await response.json();
 
-                    if (!q || q.trim() === '') {
-                        return await socket.sendMessage(sender, { text: '*`Need YT_URL or Title`*' });
-                    }
+        if (!data.status || !data.result) {
+            return await socket.sendMessage(sender, { 
+                text: '*❌ No results found or API error.*',
+                buttons: [
+                    { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: '📋 MENU' }, type: 1 }
+                ]
+            });
+        }
 
-                    const fixedQuery = convertYouTubeLink(q.trim());
+        const { title, channel, duration, cover, url } = data.result.metadata;
+        const downloadUrl = data.result.downloadUrl;
 
-                    try {
-                        const sanitizedNumber = number.replace(/[^0-9]/g, '');
-
-                        const search = await yts(fixedQuery);
-                        const data = search.videos[0];
-                        if (!data) {
-                            return await socket.sendMessage(sender, { text: '*`No results found`*' });
-                        }
-
-                        const url = data.url;
-                        const desc = `
-🎵 *𝚃𝚒𝚝𝚕𝚎 :* \`${data.title}\`
-
-◆⏱️ *𝙳𝚞𝚛𝚊𝚝𝚒𝚘𝚗* : ${data.timestamp} 
-
-◆ *𝚅𝚒𝚎𝚠𝚜* : ${data.views}
-
-◆ 📅 *𝚁𝚎𝚕𝚎𝚊𝚜 𝙳𝚊𝚝𝚎* : ${data.ago}
-
-> © Zeus
+        const captionMessage = `
+🎵 *Song Info*
+📝 Title: ${title}
+📺 Channel: ${channel}
+⏱️ Duration: ${duration}
+🔗 URL: ${url}
 `;
 
-                        await socket.sendMessage(sender, {
-                            image: { url: data.thumbnail },
-                            caption: desc,
-                        }, { quoted: msg });
+        // Send song thumbnail + info
+        await socket.sendMessage(sender, {
+            image: { url: cover },
+            caption: captionMessage,
+            buttons: [
+                { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: '📋 MENU' }, type: 1 },
+                { buttonId: `${config.PREFIX}alive`, buttonText: { displayText: '🤖 BOT INFO' }, type: 1 }
+            ]
+        });
 
-                        await socket.sendMessage(sender, { react: { text: '⬇️', key: msg.key } });
+        // Send audio
+        await socket.sendMessage(sender, {
+            audio: { url: downloadUrl },
+            mimetype: 'audio/mpeg',
+            ptt: true
+        });
 
-                        const result = await ddownr.download(url, 'mp3');
-                        const downloadLink = result.downloadUrl;
+        // Optionally send as document
+        await socket.sendMessage(sender, {
+            document: { url: downloadUrl },
+            mimetype: "audio/mpeg",
+            fileName: `${title}.mp3`,
+            caption: captionMessage
+        });
 
-                        await socket.sendMessage(sender, { react: { text: '⬆️', key: msg.key } });
-
-                        await socket.sendMessage(sender, {
-                            audio: { url: downloadLink },
-                            mimetype: "audio/mpeg",
-                            ptt: true
-                        }, { quoted: msg });
-
-                    } catch (err) {
-                        console.error(err);
-                        await socket.sendMessage(sender, { text: "*`Error occurred while downloading`*" });
-                    }
-                    break;
-                }
+    } catch (err) {
+        console.error(err);
+        await socket.sendMessage(sender, { 
+            text: '*❌ Internal Error. Please try again later.*',
+            buttons: [
+                { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: '📋 MENU' }, type: 1 }
+            ]
+        });
+    }
+    break;
+}
             }
         } catch (error) {
             console.error('Command handler error:', error);
