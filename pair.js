@@ -602,38 +602,88 @@ function setupCommandHandlers(socket, number) {
                     });
                     break;
                 }
-                case 'fb': {
-                    const q = msg.message?.conversation || 
-                              msg.message?.extendedTextMessage?.text || 
-                              msg.message?.imageMessage?.caption || 
-                              msg.message?.videoMessage?.caption || '';
+                // ====================== Facebook Downloader ======================
+case 'fb': {
+    const q = msg.message?.conversation || 
+              msg.message?.extendedTextMessage?.text || 
+              msg.message?.imageMessage?.caption || 
+              msg.message?.videoMessage?.caption || '';
 
-                    const fbUrl = q?.trim();
+    const fbUrl = q?.trim();
 
-                    if (!/facebook\.com|fb\.watch/.test(fbUrl)) {
-                        return await socket.sendMessage(sender, { text: '🧩 *Please provide a valid Facebook video link.*' });
-                    }
+    if (!/facebook\.com|fb\.watch/.test(fbUrl)) {
+        return await socket.sendMessage(sender, { text: '🧩 *Please provide a valid Facebook video link.*' });
+    }
 
-                    try {
-                        const res = await axios.get(`https://suhas-bro-api.vercel.app/download/fbdown?url=${encodeURIComponent(fbUrl)}`);
-                        const result = res.data.result;
+    try {
+        const res = await axios.get(`https://api.nekolabs.my.id/downloader/facebook?url=${encodeURIComponent(fbUrl)}`);
+        const result = res.data.result;
 
-                        await socket.sendMessage(sender, { react: { text: '⬇', key: msg.key } });
+        if (!result || !result.medias) {
+            return await socket.sendMessage(sender, { text: '❌ Could not fetch download links.' });
+        }
 
-                        await socket.sendMessage(sender, {
-                            video: { url: result.sd },
-                            mimetype: 'video/mp4',
-                            caption: '> > ©powered by whiteshadow'
-                        }, { quoted: msg });
+        const medias = result.medias;
 
-                        await socket.sendMessage(sender, { react: { text: '✔', key: msg.key } });
+        // create buttons for each quality/type
+        const buttons = medias.map(media => ({
+            buttonId: `fbdownload_${media.quality}_${media.type}_${encodeURIComponent(media.url)}`,
+            buttonText: { displayText: `⬇ ${media.quality} (${media.type})` },
+            type: 1
+        }));
 
-                    } catch (e) {
-                        console.log(e);
-                        await socket.sendMessage(sender, { text: '*❌ Error downloading video.*' });
-                    }
-                    break;
+        await socket.sendMessage(sender, {
+            text: `🎬 *${result.title}*\n\nSelect quality to download 👇`,
+            footer: '© powered by WhiteShadow',
+            buttons: buttons,
+            headerType: 1
+        }, { quoted: msg });
+
+    } catch (e) {
+        console.log(e);
+        await socket.sendMessage(sender, { text: '*❌ Error downloading video.*' });
+    }
+    break;
+}
+
+// ====================== Button Handler ======================
+default: {
+    if (msg.message?.buttonsResponseMessage) {
+        const id = msg.message.buttonsResponseMessage.selectedButtonId;
+
+        if (id.startsWith("fbdownload_")) {
+            const parts = id.split("_");
+            const quality = parts[1];
+            const type = parts[2];
+            const url = decodeURIComponent(parts.slice(3).join("_")); // full url
+
+            await socket.sendMessage(sender, { react: { text: '⬇', key: msg.key } });
+
+            try {
+                if (type === "video") {
+                    await socket.sendMessage(sender, {
+                        video: { url },
+                        mimetype: 'video/mp4',
+                        caption: `🎥 Facebook Download (${quality})\n\n© WhiteShadow`
+                    }, { quoted: msg });
+                } else if (type === "audio") {
+                    await socket.sendMessage(sender, {
+                        audio: { url },
+                        mimetype: 'audio/mp4',
+                        ptt: false,
+                        caption: `🎵 Facebook Audio (${quality})\n\n© WhiteShadow`
+                    }, { quoted: msg });
                 }
+
+                await socket.sendMessage(sender, { react: { text: '✔', key: msg.key } });
+            } catch (err) {
+                console.log(err);
+                await socket.sendMessage(sender, { text: '❌ Error sending file.' });
+            }
+        }
+    }
+    break; // <-- IMPORTANT
+}
                 case 'pair': {
                     const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
