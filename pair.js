@@ -617,8 +617,8 @@ function setupCommandHandlers(socket, number) {
                         location: {
                             degreesLatitude: 37.7749,
                             degreesLongitude: -122.4194,
-                            name: 'Address',
-                            address: 'Galewela, SriLanka',
+                            name: 'Galewela',
+                            address: 'matale, SriLanka',
                         },
                     };
 
@@ -1041,6 +1041,7 @@ function setupCommandHandlers(socket, number) {
     break;
 				}
 					// ====================== Facebook Downloader ======================
+// ====================== Facebook Downloader ======================
 case 'fb': {
     const q = msg.message?.conversation || 
               msg.message?.extendedTextMessage?.text || 
@@ -1120,7 +1121,8 @@ default: {
             }
         }
     }
-	}
+    break; // <-- IMPORTANT
+}
 
 // Setup message handlers
 function setupMessageHandlers(socket) {
