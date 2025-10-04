@@ -11,12 +11,12 @@
       "required": true,
       "value": "ghp_your_actual_token_here"
     },
-    "GITHUB_OWNER": {
+    "GITHUB_REPO_OWNER": {
       "description": "Your GitHub username or organization",
       "required": true,
       "value": "your_github_username"
     },
-    "GITHUB_REPO": {
+    "GITHUB_REPO_NAME": {
       "description": "Your GitHub repository name",
       "required": true,
       "value": "your_repo_name"
