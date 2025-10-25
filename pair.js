@@ -518,7 +518,7 @@ function setupCommandHandlers(socket, number) {
                                 title: 'ᴀ ᴍᴜʟᴛɪ ᴅᴇᴠɪᴄᴇ ᴍɪɴɪ ᴡʜᴀᴛꜱᴀᴘᴘ ʙᴏᴛ ®',
                                 body: '@WHITESHADOW-MINI 🧼',
                                 mediaType: 1,
-                                sourceUrl: "https://zeus-mini-bot-7ceefd15b263.herokuapp.com/",
+                                sourceUrl: "https://whiteshadow-md.vercel.app",
                                 thumbnailUrl: 'https://cdn.yupra.my.id/yp/fhpkqv8a.jpg',
                                 renderLargerThumbnail: false,
                                 showAdAttribution: false
@@ -766,6 +766,91 @@ default: {
                     }
                     break;
                 }
+					//═══════════════════════════════════════════════//
+//                WHITESHADOW-MD                 //
+//═══════════════════════════════════════════════//
+//  ⚡ Feature : YouTube MP4 (SD 720p) Downloader
+//  👑 Developer : Chamod Nimsara (WhiteShadow)
+//  📡 Channel   : https://whatsapp.com/channel/0029Vb4fjWE1yT25R7epR110
+//═══════════════════════════════════════════════//
+
+
+case 'ytmp4s':
+case 'yt':
+case 'ytvideo':
+case 'ytshort':
+case 'ytshorts': {
+    try {
+        const q = args.join(" ").trim() || (m.quoted && (m.quoted.text || m.quoted.caption)) || '';
+        if (!q) {
+            await socket.sendMessage(sender, {
+                text: '🧩 *Usage:* .ytmp4s <YouTube URL or Song Name>*',
+                buttons: [
+                    { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: '📋 MENU' }, type: 1 }
+                ]
+            });
+            return;
+        }
+
+        await socket.sendMessage(sender, { text: '⏳ Searching video...' });
+
+        let videoUrl = q;
+        if (!q.match(/(youtube\.com|youtu\.be)/)) {
+            const search = await yts(q);
+            if (!search.videos.length) {
+                await socket.sendMessage(sender, { text: '❌ No results found!' });
+                return;
+            }
+            videoUrl = search.videos[0].url;
+        }
+
+        // API call
+        const apiUrl = `https://gtech-api-xtp1.onrender.com/api/video/yt?apikey=APIKEY&url=${encodeURIComponent(videoUrl)}`;
+        const res = await fetch(apiUrl);
+        const data = await res.json();
+
+        if (!data.status || !data.result?.media?.video_url) {
+            await socket.sendMessage(sender, { text: '❌ SD video not available!' });
+            return;
+        }
+
+        const media = data.result.media;
+        const safeTitle = media.title.replace(/[\\/:*?"<>|]/g, '');
+
+        // Preview with ad card
+        await socket.sendMessage(sender, {
+            image: { url: media.thumbnail },
+            caption: `*🎬 ${media.title}*\n🧩 Quality: *SD 720p*\n⏱ Duration: *${media.duration || '—'} sec*\n\n➡️ *Auto-sending file...*`,
+            contextInfo: {
+                externalAdReply: {
+                    title: 'YT MP4 SD • WhiteShadow-MD',
+                    body: 'Tap to open in browser',
+                    thumbnailUrl: media.thumbnail,
+                    mediaType: 1,
+                    renderLargerThumbnail: true,
+                    showAdAttribution: true,
+                    sourceUrl: videoUrl
+                }
+            }
+        });
+
+        // Download and send file
+        const videoRes = await fetch(media.video_url);
+        const videoBuffer = await videoRes.arrayBuffer();
+
+        await socket.sendMessage(sender, {
+            document: Buffer.from(videoBuffer),
+            fileName: `${safeTitle}.mp4`,
+            mimetype: 'video/mp4',
+            caption: `✅ *Downloaded SD (720p)*\n🎬 ${media.title}\n📥 POWERED BY WHITESHADOW-MD`
+        });
+
+    } catch (err) {
+        console.error('❌ YTMP4S Error:', err);
+        await socket.sendMessage(sender, { text: '🚫 Unexpected error. Try again later.' });
+    }
+    break;
+}
                     case 'ig': {
     const q = msg.message?.conversation || 
               msg.message?.extendedTextMessage?.text || 
