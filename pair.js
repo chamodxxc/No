@@ -528,18 +528,44 @@ function setupCommandHandlers(socket, number) {
                     break;
                 }
                 case 'ping': {
-                    var inital = new Date().getTime();
-                    let ping = await socket.sendMessage(sender, { text: '*_Pinging to whiteshadow Module..._* ❗' });
-                    var final = new Date().getTime();
-                    await socket.sendMessage(sender, { text: '《 █▒▒▒▒▒▒▒▒▒▒▒》10%', edit: ping.key });
-                    await socket.sendMessage(sender, { text: '《 ████▒▒▒▒▒▒▒▒》30%', edit: ping.key });
-                    await socket.sendMessage(sender, { text: '《 ███████▒▒▒▒▒》50%', edit: ping.key });
-                    await socket.sendMessage(sender, { text: '《 ██████████▒▒》80%', edit: ping.key });
-                    await socket.sendMessage(sender, { text: '《 ████████████》100%', edit: ping.key });
+    try {
+        // Ping Speed Calculation
+        const start = performance.now();
+        await delay(100); // Small delay to measure latency
+        const end = performance.now();
+        const ping = Math.floor(end - start);
 
-                    return await socket.sendMessage(sender, {
-                        text: '☁ *Pong '+ (final - inital) + ' Ms*', edit: ping.key });
-                }
+        // Uptime Calculation
+        const startTime = socketCreationTime.get(number) || Date.now();
+        const uptime = Math.floor((Date.now() - startTime) / 1000);
+        const hours = Math.floor(uptime / 3600);
+        const minutes = Math.floor((uptime % 3600) / 60);
+        const seconds = Math.floor(uptime % 60);
+
+        const title = '📡 System Status: *PING RESULT*';
+        const content = `*© bY|* WHITESHADOW\n` +
+                        `*◯ P I N G*\n` +
+                        `> Response Speed: *${ping} ms*\n\n` +
+                        `*◯ U P T I M E*\n` +
+                        `> ${hours}h ${minutes}m ${seconds}s\n` +
+                        `\n*Everything running smoothly ✅*`;
+
+        const footer = config.BOT_FOOTER;
+
+        await socket.sendMessage(sender, {
+            text: formatMessage(title, content, footer),
+            buttons: [
+                { buttonId: `${config.PREFIX}menu`, buttonText: { displayText: 'MENU' }, type: 1 },
+                { buttonId: `${config.PREFIX}alive`, buttonText: { displayText: 'ALIVE' }, type: 1 }
+            ],
+            quoted: msg
+        });
+    } catch (e) {
+        await socket.sendMessage(sender, { text: "❌ Error while checking ping." }, { quoted: msg });
+        console.error(e);
+    }
+    break;
+								 }
                 case 'owner': {
                     await socket.sendMessage(sender, { 
                         react: { 
