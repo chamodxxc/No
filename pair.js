@@ -1023,11 +1023,12 @@ case 'tourl': {
         await socket.sendMessage(sender, { text: `❌ ${errMsg}` }, { quoted: msg });
     }
     break;
-} case "wormgpt": {
+} 
+				case "wormgpt": {
   if (!text) return conn.sendMessage(m.chat, { text: `*Example:* ${m.prefix + command} create DDoS code` }, { quoted: m })
 
   try {
-    const api_key = "KEY_LU" //Isi dengan key kamu
+    const api_key = "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" //Isi dengan key kamu
     const base_url = "https://openrouter.ai/api/v1"
     const model = "deepseek/deepseek-v3.1-terminus"
 
